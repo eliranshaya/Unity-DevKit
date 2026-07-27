@@ -1,0 +1,22 @@
+{
+  "name": "com.eliranshaya.devkit",
+  "version": "1.0.0",
+  "displayName": "DevKit",
+  "description": "Zero-setup, runtime-generated developer and cheat panel for Unity. Drop one empty GameObject into a scene, press F1, and a full debug panel builds itself at runtime - no prefabs, no sprites, no scene wiring. Stripped entirely from release builds through the DEVKIT_ENABLED define symbol.",
+  "unity": "2021.3",
+  "author": {
+    "name": "Eliran Shaya",
+    "url": "https://github.com/eliranshaya"
+  },
+  "keywords": ["debug", "cheat", "developer", "tools", "qa", "runtime"],
+  "dependencies": {
+    "com.unity.ugui": "1.0.0"
+  },
+  "samples": [
+    {
+      "displayName": "Basic Integration",
+      "description": "A wallet, a level manager and an IDevKitGameAdapter wired to the built-in modules.",
+      "path": "Samples~/BasicIntegration"
+    }
+  ]
+}

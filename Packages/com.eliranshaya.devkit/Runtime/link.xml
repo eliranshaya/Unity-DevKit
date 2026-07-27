@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DevKit reaches [DevAction] methods through reflection only, so managed stripping
+  would remove them. Preserve the DevKit assemblies wholesale.
+
+  Methods that YOU annotate with [DevAction] live in YOUR assembly and are not covered
+  by this file. In stripped builds add [UnityEngine.Scripting.Preserve] to them, or
+  ship your own link.xml.
+-->
+<linker>
+  <assembly fullname="Core.DevKit" preserve="all" />
+  <assembly fullname="Core.DevKit.InputSystem" preserve="all" />
+</linker>
