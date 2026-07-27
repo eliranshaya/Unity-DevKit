@@ -56,14 +56,12 @@ namespace DevKit.Internal
         static void ResetOnEnterPlayMode()
         {
             Clear();
-            DevKitAdapter.Reset();
         }
 
         internal static void Clear()
         {
             Entries.Clear();
             ByPath.Clear();
-            BuiltinModules.Reset();
             _scanned = false;
             _version++;
         }

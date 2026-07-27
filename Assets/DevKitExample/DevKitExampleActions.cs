@@ -14,12 +14,8 @@ using UnityEngine.SceneManagement;
 /// panel has something to move. Every action below is a one-liner you would replace with a call
 /// into your own systems.
 /// </para>
-/// <para>
-/// It also implements <see cref="IDevKitGameAdapter"/>, which is what turns the built-in Level and
-/// Economy categories on.
-/// </para>
 /// </summary>
-public class DevKitExampleActions : MonoBehaviour, IDevKitGameAdapter
+public class DevKitExampleActions : MonoBehaviour
 {
     /// <summary>Any enum works as an action parameter. The panel gives it a button that cycles.</summary>
     public enum Difficulty
@@ -50,11 +46,8 @@ public class DevKitExampleActions : MonoBehaviour, IDevKitGameAdapter
 
     void Awake()
     {
-        // Hands the built-in Level and Economy modules something to talk to. Without this they
-        // register nothing and the panel shows a hint under "Game" instead.
-        DevActions.SetAdapter(this);
-
         RegisterPlayerActions();
+        RegisterLevelActions();
         RegisterWorldActions();
         RegisterDeviceActions();
         RegisterStatWatches();
@@ -166,7 +159,7 @@ public class DevKitExampleActions : MonoBehaviour, IDevKitGameAdapter
     [DevAction("Cheats/Give 1000 Coins")]
     void GiveThousandCoins()
     {
-        _coins += 1000;
+        AddCoins(1000);
     }
 
     /// <summary>Parameters and confirm work on attributes exactly as they do on Register.</summary>
@@ -185,21 +178,21 @@ public class DevKitExampleActions : MonoBehaviour, IDevKitGameAdapter
         Debug.Log("[Example] Save wiped.");
     }
 
-    // ------------------------------------------------------------------ adapter
+    // ------------------------------------------------------------------ your own "level" cheats
     //
-    // Implementing this is what makes the built-in Level and Economy categories appear.
+    // DevKit ships none of these. What a level is differs in every project, so you register the
+    // handful you actually want - which is all the Level module ever did anyway.
 
-    public void WinLevel()
+    void RegisterLevelActions()
     {
-        Debug.Log("[Example] Level won. Call your own LevelManager here.");
+        DevActions.Register("Level/Win", () => Debug.Log("[Example] Level won."));
+        DevActions.Register("Level/Lose", () => Debug.Log("[Example] Level lost."));
+        DevActions.Register<int>("Level/Go To Build Index", LoadLevel);
+        DevActions.RegisterWatch("Level/= Build Index",
+            () => SceneManager.GetActiveScene().buildIndex.ToString());
     }
 
-    public void LoseLevel()
-    {
-        Debug.Log("[Example] Level lost. Call your own LevelManager here.");
-    }
-
-    public void LoadLevel(int index)
+    static void LoadLevel(int index)
     {
         if (index < 0 || index >= SceneManager.sceneCountInBuildSettings)
         {
@@ -212,14 +205,9 @@ public class DevKitExampleActions : MonoBehaviour, IDevKitGameAdapter
         SceneManager.LoadScene(index);
     }
 
-    public void AddCurrency(long amount)
+    void AddCoins(long amount)
     {
         _coins = Math.Max(0L, _coins + amount);
-    }
-
-    public long GetCurrency()
-    {
-        return _coins;
     }
 
     // ------------------------------------------------------------------ plumbing

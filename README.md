@@ -8,7 +8,7 @@ DevKit binds no input of its own — you decide what opens it.
 
 - Unity 2021.3 or newer
 - uGUI (`com.unity.ugui`) — installed in every project by default
-- Either input backend, or both at once
+- Either input backend, both at once, or neither — DevKit reads no input of its own
 
 ## Installation
 
@@ -26,7 +26,7 @@ https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.d
 To lock to a specific version, append the tag:
 
 ```
-https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.devkit#1.1.0
+https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.devkit#1.1.1
 ```
 
 You can also add it manually by editing your project's `Packages/manifest.json`:
@@ -34,7 +34,7 @@ You can also add it manually by editing your project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.eliranshaya.devkit": "https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.devkit#1.1.0"
+    "com.eliranshaya.devkit": "https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.devkit#1.1.1"
   }
 }
 ```
@@ -119,27 +119,23 @@ DevActions.Unregister("Level/Win");   // rarely needed; the registry is cleared 
 
 | Module | Actions |
 |---|---|
-| `Time` | Pause, Resume, Timescale 0.1 / 0.5 / 1 / 2 / 5, Set Timescale, Step One Frame, live scale watch |
+| `Time` | Set Timescale (`float`), live scale watch |
 | `Diagnostics` | FPS watch, Mono heap watch, screen watch, device info, Collect Garbage, Clear PlayerPrefs (confirmed) |
-| `Level` | Win, Lose, Restart, Go To Level, Next, Previous |
-| `Economy` | Add 100 / 1000, Add / Remove / Set Currency, Max Out, live balance watch |
 
-`Time` and `Diagnostics` always work. `Level` and `Economy` cannot know your classes, so they talk through a small adapter:
+That is the whole list, and it is short on purpose. Both modules talk only to the engine, which behaves the same in every project.
+
+**DevKit ships no level, economy or player cheats.** What a "level" or a "currency" means differs in every game, so a generic guess at them is worth less than the two lines you would write yourself:
 
 ```csharp
-public class GameAdapter : MonoBehaviour, IDevKitGameAdapter
-{
-    void Awake() => DevActions.SetAdapter(this);   // optional; DevKit also finds it on its own
-
-    public void WinLevel()               => LevelManager.Win();
-    public void LoseLevel()              => LevelManager.Lose();
-    public void LoadLevel(int index)     => LevelManager.Load(index);
-    public void AddCurrency(long amount) => Wallet.Add(amount);
-    public long GetCurrency()            => Wallet.Coins;
-}
+DevActions.Register("Level/Win", () => LevelManager.Win());
+DevActions.Register<int>("Level/Go To", i => LevelManager.Load(i));
+DevActions.Register<int>("Economy/Add Coins", amount => Wallet.Add(amount));
+DevActions.RegisterWatch("Economy/= Coins", () => Wallet.Coins.ToString());
 ```
 
-Without an adapter those two modules register nothing and the panel shows a one-line hint under `Game`. Nothing throws and nothing spams the console.
+Those four lines are also exactly what the built-in Level and Economy modules used to do, minus an interface you had to implement to get them.
+
+The `Time` module is one row rather than a strip of presets, for the same reason — a typed field covers `0`, `0.5`, `1` and `5` with one row instead of six.
 
 ## Stripping it from release builds
 
@@ -185,7 +181,7 @@ Nested paths like `Player/Combat/Weapons` become a single rail entry reading `Pl
 
 ## Samples
 
-**Basic Integration** — a wallet, an adapter and both registration styles. Import it from the package's page in the Package Manager.
+**Basic Integration** — a wallet and both registration styles. Import it from the package's page in the Package Manager.
 
 ## License
 

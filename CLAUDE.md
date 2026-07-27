@@ -58,13 +58,10 @@ Unity-DevKit/
         │   │   ├── DevActionAttribute.cs     # the [DevAction] attribute
         │   │   ├── DevActionEntry.cs         # internal record of one registered entry
         │   │   ├── DevActionRegistry.cs      # storage + reflection scan
-        │   │   ├── DevKitAdapter.cs          # resolves IDevKitGameAdapter
         │   │   ├── DevKitCompat.cs           # every 2021.3-vs-Unity-6 API difference
         │   │   ├── DevKitInput.cs            # picks the UI input module for the active backend
         │   │   ├── DevKitLog.cs
-        │   │   ├── DevKitRunner.cs           # hidden coroutine host for static modules
-        │   │   ├── DevKitScene.cs            # owns flags + teardown of DevKit's runtime objects
-        │   │   └── IDevKitGameAdapter.cs
+        │   │   └── DevKitScene.cs            # owns flags + teardown of DevKit's runtime objects
         │   ├── UI/
         │   │   ├── DevPanel.cs               # builds + owns the runtime canvas
         │   │   ├── DevPanelBuilder.cs        # low-level uGUI construction helpers
@@ -76,15 +73,10 @@ Unity-DevKit/
         │   │       ├── DevInfoRow.cs         # static hint text
         │   │       ├── DevToast.cs
         │   │       └── DevConfirmDialog.cs
-        │   ├── Modules/
-        │   │   ├── BuiltinModules.cs         # installs the four below
-        │   │   ├── LevelModule.cs            # Win / Lose / Load Level
-        │   │   ├── EconomyModule.cs          # Add / Remove currency
-        │   │   ├── TimeModule.cs             # timescale, pause, step
-        │   │   └── DiagnosticsModule.cs      # FPS, memory, screen info
-        │   └── InputSystem/                  # optional assembly — see §6
-        │       ├── Core.DevKit.InputSystem.asmdef
-        │       └── DevKitInputSystemProvider.cs
+        │   └── Modules/
+        │       ├── BuiltinModules.cs         # installs the two below — engine-only, see §7
+        │       ├── TimeModule.cs             # one float field for the time scale
+        │       └── DiagnosticsModule.cs      # FPS, memory, screen info
         ├── Editor/
         │   ├── Core.DevKit.Editor.asmdef
         │   ├── DevKitDefines.cs              # read-modify-write of the define list
@@ -264,17 +256,24 @@ Rules:
   `PlayerSettings.SetScriptingDefineSymbols` for the active build target group. It must
   read the existing list, add/remove only our symbol, and write it back — never clobber.
 
-### The one asmdef that *does* carry a define constraint
+### Never reference the Input System from an asmdef
 
-`Core.DevKit.InputSystem` is constrained on `DEVKIT_HAS_INPUT_SYSTEM`, which its own
-`versionDefines` sets when `com.unity.inputsystem` is installed. This is **not** the rule above
-being broken — the constraint is on the *package being present*, never on `DEVKIT_ENABLED`.
+`Core.DevKit` must not reference `com.unity.inputsystem`. An asmdef reference to a package that
+is not installed stops the assembly compiling, which breaks every project without it.
 
-The reason it exists: `Core.DevKit` must never reference the Input System, or a project without
-that package fails to compile. So the Input System code lives in a separate assembly that simply
-is not built when the package is missing, and hands itself to `DevKitInput.SetProvider` through
-`[RuntimeInitializeOnLoadMethod]`. Core depends on nothing; the optional assembly depends on Core.
-Keep it that way — never add an Input System reference to `Core.DevKit`.
+DevKit once solved this with a second assembly (`Core.DevKit.InputSystem`) constrained on a
+`versionDefines` symbol, so it simply was not built when the package was missing. That worked,
+but three files and an extra asmdef were a lot of machinery for one `AddComponent` call — it was
+removed in 1.1.1.
+
+The single thing DevKit needs from the Input System is `InputSystemUIInputModule`, and only when
+it has to create an EventSystem itself. `DevKitInput` now resolves that type by name through
+`Type.GetType` and adds it. One lookup, once, guarded by `#if ENABLE_INPUT_SYSTEM`.
+
+Note the guard is on `ENABLE_INPUT_SYSTEM` — the backend being *active* — not on the package being
+*installed*. A project can have the package present while active input handling is still Legacy,
+and in that case the Input System module receives nothing. The old optional-assembly approach got
+this wrong.
 
 ### IL2CPP / managed stripping
 
@@ -287,33 +286,39 @@ that preserves the DevKit assembly, and document that users should add
 
 ## 7. Built-in modules
 
-Modules are static classes with `[DevAction]` methods that self-register via the scan.
-Each module must **degrade gracefully** — the game may not have the relevant system.
+There are exactly two, installed by `BuiltinModules.Install()` after the scan.
 
 | Module | Actions |
 |---|---|
-| `LevelModule` | Win Level, Lose Level, Restart, Go To Level (int), Next, Previous |
-| `EconomyModule` | Add Currency (int), Remove Currency (int), Set Currency (int), Max Out |
-| `TimeModule` | Pause, Timescale 0.1/0.5/1/2/5, Step One Frame |
-| `DiagnosticsModule` | FPS watch, memory watch, resolution, device model, clear PlayerPrefs (confirm) |
+| `TimeModule` | Set Timescale (float), live scale watch |
+| `DiagnosticsModule` | FPS watch, memory watch, resolution, device model, log device info, collect garbage, clear PlayerPrefs (confirm) |
 
-`LevelModule` and `EconomyModule` cannot know the game's classes. They call into a small
-adapter interface the user implements:
+### The rule that decides what may become a module
 
-```csharp
-public interface IDevKitGameAdapter
-{
-    void WinLevel();
-    void LoseLevel();
-    void LoadLevel(int index);
-    void AddCurrency(long amount);
-    long GetCurrency();
-}
-```
+**A built-in module may only talk to the engine.** `Time`, `Screen`, `SystemInfo`,
+`PlayerPrefs`, `GC` — things that behave identically in every project.
 
-The adapter is found once via `FindObjectsOfType` / a registered instance. If none is
-found, those modules register **nothing** and the panel shows a one-line hint explaining
-how to add an adapter. Never throw, never spam the console.
+Anything that needs to know what a *game* is does **not** belong here. DevKit shipped
+`LevelModule` and `EconomyModule` once, reaching the game through an `IDevKitGameAdapter`
+the user had to implement. It was removed in 1.1.1, and the reasoning is worth keeping:
+
+- Every game defines "level" and "currency" differently — build index, level id, scriptable
+  object, server-authoritative wallet. The interface fit none of them well.
+- A user who implemented all five methods to get six generic buttons had written *more* code
+  than the four `DevActions.Register` lines that would have given them exactly the buttons
+  they wanted, named the way they think about them.
+- A project that did not implement it got a permanent "adapter missing" hint row for a
+  feature it never asked for.
+
+If a future module is tempting, ask whether it needs an interface for the host project to
+implement. If yes, it is not a module — it is documentation showing the user two lines of
+`DevActions.Register`.
+
+### Prefer one typed field over a row of presets
+
+`TimeModule` is a single float field, not buttons for 0.1 / 0.5 / 1 / 2 / 5. A typed field
+covers every value including the ones nobody guessed, in one row instead of six. Rows are
+the scarce resource in a panel someone scrolls on a phone.
 
 ---
 
@@ -328,8 +333,9 @@ how to add an adapter. Never throw, never spam the console.
   `[Conditional("DEVKIT_ENABLED")]`.
 - Public API changes require a matching README update in the same commit.
 - Input: DevKit reads no input. The only backend-specific thing left is picking the UI input
-  module for an EventSystem DevKit created, which lives behind `DevKitInput` guarded by
-  `#if ENABLE_LEGACY_INPUT_MANAGER`. Both backends can be enabled simultaneously — handle it.
+  module for an EventSystem DevKit created, which lives in `DevKitInput` behind
+  `#if ENABLE_INPUT_SYSTEM` / `#if ENABLE_LEGACY_INPUT_MANAGER`. Both backends can be enabled
+  simultaneously, and neither can — handle all three cases, and compile-check all three.
 
 ---
 
@@ -359,8 +365,9 @@ Before considering any change done:
    appear and still fire.
 4. Register 200 actions across 15 categories → panel opens in under 100 ms and scrolls
    without frame drops.
-5. Both input backends, and both enabled at once — the panel must respond to clicks in each,
-   which is the only thing an input backend is still used for.
+5. All three input configurations — legacy only, Input System only, both at once. The panel must
+   respond to clicks in each; that is the only thing an input backend is still used for. Check
+   specifically with *no EventSystem in the scene*, which is the path that has to create one.
 6. Scene load while the panel is open → panel survives and stays functional.
 7. Exit Play Mode → nothing named `[DevKit] ` is left in the hierarchy. Repeat twice; a leak
    here accumulates one object per run.

@@ -67,19 +67,6 @@ namespace DevKit
 #endif
         }
 
-        /// <summary>
-        /// Hands the built-in Level and Economy modules an adapter explicitly. Without this call
-        /// DevKit looks for an <see cref="IDevKitGameAdapter"/> component in the loaded scenes the
-        /// first time the panel opens.
-        /// </summary>
-        [Conditional("DEVKIT_ENABLED")]
-        public static void SetAdapter(IDevKitGameAdapter adapter)
-        {
-#if DEVKIT_ENABLED
-            DevKitAdapter.Set(adapter);
-#endif
-        }
-
         /// <summary>Opens the panel, building it on first use.</summary>
         [Conditional("DEVKIT_ENABLED")]
         public static void Open()
