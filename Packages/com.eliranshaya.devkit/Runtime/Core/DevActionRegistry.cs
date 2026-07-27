@@ -12,7 +12,7 @@ namespace DevKit.Internal
     /// <see cref="DevActionAttribute"/> methods.
     /// <para>
     /// The scan is lazy on purpose: it runs the first time the panel is opened, never in
-    /// <c>Awake</c> or <c>Start</c>. A player who never presses the hotkey pays nothing for it.
+    /// <c>Awake</c> or <c>Start</c>. A player who never opens the panel pays nothing for it.
     /// </para>
     /// </summary>
     internal static class DevActionRegistry

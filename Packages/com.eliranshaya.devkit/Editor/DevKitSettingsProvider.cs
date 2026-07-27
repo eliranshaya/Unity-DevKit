@@ -79,7 +79,7 @@ namespace DevKit.EditorTools
             EditorGUILayout.LabelField("Scene Setup", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
                 "Add an empty GameObject with the DevKitBootstrap component to your first scene. " +
-                "That is the entire setup - the panel builds itself the first time you press the hotkey.",
+                "That is the entire setup - the panel builds itself the first time you call Open().",
                 MessageType.None);
 
             if (GUILayout.Button("Add DevKit Bootstrap to Open Scene", GUILayout.Height(28f)))

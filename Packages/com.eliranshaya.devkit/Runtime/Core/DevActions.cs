@@ -98,7 +98,7 @@ namespace DevKit
 #endif
         }
 
-        /// <summary>Toggles the panel. Same thing the hotkey does.</summary>
+        /// <summary>Opens the panel if it is closed, closes it if it is open.</summary>
         [Conditional("DEVKIT_ENABLED")]
         public static void Toggle()
         {

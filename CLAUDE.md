@@ -3,8 +3,9 @@
 A zero-setup, runtime-generated developer/cheat panel for Unity games.
 
 The entire package is stripped from release builds via a define symbol. In dev builds,
-the user drops **one empty GameObject** into a scene, presses a hotkey, and a full
-debug panel builds itself at runtime — no prefabs, no scene wiring, no assets.
+the user drops **one empty GameObject** into a scene, calls `Open()` from a UI Button or
+their own code, and a full debug panel builds itself at runtime — no prefabs, no scene
+wiring, no assets.
 
 ---
 
@@ -59,10 +60,10 @@ Unity-DevKit/
         │   │   ├── DevActionRegistry.cs      # storage + reflection scan
         │   │   ├── DevKitAdapter.cs          # resolves IDevKitGameAdapter
         │   │   ├── DevKitCompat.cs           # every 2021.3-vs-Unity-6 API difference
-        │   │   ├── DevKitInput.cs            # hotkey abstraction (old + new input system)
+        │   │   ├── DevKitInput.cs            # picks the UI input module for the active backend
         │   │   ├── DevKitLog.cs
         │   │   ├── DevKitRunner.cs           # hidden coroutine host for static modules
-        │   │   ├── DevKey.cs                 # backend-neutral key enum
+        │   │   ├── DevKitScene.cs            # owns flags + teardown of DevKit's runtime objects
         │   │   └── IDevKitGameAdapter.cs
         │   ├── UI/
         │   │   ├── DevPanel.cs               # builds + owns the runtime canvas
@@ -141,8 +142,15 @@ DevActions.Unregister("Level/Win");   // rarely needed; registry is cleared on d
 
 ## 4. Bootstrap flow
 
-`DevKitBootstrap` is a `MonoBehaviour` with inspector fields for hotkey, mobile gesture,
-and `dontDestroyOnLoad` (default true).
+`DevKitBootstrap` is a `MonoBehaviour` with inspector fields for `dontDestroyOnLoad`
+(default true), `pauseWhenOpen` and `openOnStart`.
+
+**DevKit binds no input.** No hotkey, no touch gesture, no `Update`. The panel is opened by
+calling `Open()`, which is public and parameterless so it drops straight into a UI Button's
+OnClick. Anyone wanting a keyboard shortcut writes one line against their own backend and
+calls `DevActions.Toggle()`. Do not reintroduce input polling here — it costs every frame of
+every play session to serve a case the host project can cover itself, and it competes with
+the game's own input.
 
 ```
 Awake()
@@ -151,16 +159,17 @@ Awake()
  └─ DontDestroyOnLoad
  └─ DO NOT build UI, DO NOT run the reflection scan
 
-Update()
- └─ poll DevKitInput for the toggle (default F1; mobile: 3-finger tap held 0.5s)
- └─ on first toggle:
+Open()   // public; from a Button, from user code, or from Start when openOnStart is set
+ └─ on first call:
       ├─ DevActionRegistry.ScanAssemblies()   // one time, cached
-      └─ DevPanel.Build()                     // one time, cached, then SetActive
- └─ on subsequent toggles: just SetActive(!active)
+      └─ DevPanel.Build()                     // one time, cached
+ └─ SetVisible(true)
+
+Close() / Toggle()   // public, just SetVisible
 ```
 
-**The reflection scan and UI construction must be lazy.** A user who never opens the
-panel should pay nothing but one `if` per frame.
+**The reflection scan and UI construction must be lazy.** A user who never opens the panel
+pays nothing at all — there is no per-frame code to pay for.
 
 ### Scan rules
 
@@ -318,8 +327,9 @@ how to add an adapter. Never throw, never spam the console.
 - All logs are prefixed `[DevKit]` and go through `DevKitLog`, which is itself
   `[Conditional("DEVKIT_ENABLED")]`.
 - Public API changes require a matching README update in the same commit.
-- Input: support both backends behind `DevKitInput`, guarded by `#if ENABLE_INPUT_SYSTEM`
-  and `#if ENABLE_LEGACY_INPUT_MANAGER`. Both can be enabled simultaneously — handle it.
+- Input: DevKit reads no input. The only backend-specific thing left is picking the UI input
+  module for an EventSystem DevKit created, which lives behind `DevKitInput` guarded by
+  `#if ENABLE_LEGACY_INPUT_MANAGER`. Both backends can be enabled simultaneously — handle it.
 
 ---
 
@@ -340,13 +350,17 @@ how to add an adapter. Never throw, never spam the console.
 
 Before considering any change done:
 
-1. Fresh project, package added via UPM, empty GameObject + `DevKitBootstrap`, press F1 →
-   panel appears with the built-in modules. No console errors, no missing font boxes.
+1. Fresh project, package added via UPM, empty GameObject + `DevKitBootstrap`, a UI Button
+   wired to `DevKitBootstrap.Open` → panel appears with the built-in modules. No console
+   errors, no missing font boxes.
 2. Remove `DEVKIT_ENABLED` → project still compiles, including user code that calls
    `DevActions.Register`. Panel never appears. Bootstrap GameObject self-destructs.
 3. Build for Android/iOS with IL2CPP + managed stripping High → attributed actions still
    appear and still fire.
 4. Register 200 actions across 15 categories → panel opens in under 100 ms and scrolls
    without frame drops.
-5. Both input backends, and both enabled at once.
+5. Both input backends, and both enabled at once — the panel must respond to clicks in each,
+   which is the only thing an input backend is still used for.
 6. Scene load while the panel is open → panel survives and stays functional.
+7. Exit Play Mode → nothing named `[DevKit] ` is left in the hierarchy. Repeat twice; a leak
+   here accumulates one object per run.

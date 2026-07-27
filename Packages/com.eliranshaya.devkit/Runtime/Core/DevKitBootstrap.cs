@@ -7,12 +7,18 @@ using DevKit.Internal;
 namespace DevKit
 {
     /// <summary>
-    /// The one component a project needs. Drop it on an empty GameObject, press the hotkey, and
-    /// the panel builds itself.
+    /// The one component a project needs. Drop it on an empty GameObject and open the panel by
+    /// calling <see cref="Open"/> - from a UI Button's OnClick, or from your own code.
+    /// <para>
+    /// DevKit binds no input of its own. <see cref="Open"/>, <see cref="Close"/> and
+    /// <see cref="Toggle"/> are public and parameterless, so they show up directly in a Button's
+    /// OnClick dropdown. If you want a keyboard shortcut, call
+    /// <c>DevActions.Toggle()</c> from wherever you already read input.
+    /// </para>
     /// <para>
     /// This type is always compiled so that a stale GameObject left in a shipped scene does not
     /// become a missing script reference. With <c>DEVKIT_ENABLED</c> undefined it destroys itself
-    /// in <c>Awake</c> and has no <c>Update</c> at all.
+    /// in <c>Awake</c>, and <see cref="Open"/> does nothing.
     /// </para>
     /// </summary>
     [AddComponentMenu("DevKit/DevKit Bootstrap")]
@@ -24,23 +30,6 @@ namespace DevKit
         // but with the symbol off nothing reads them. Silence CS0414 rather than ship warnings.
 #pragma warning disable 0414
 #endif
-
-        [Header("Toggle")]
-        [SerializeField]
-        [Tooltip("Keyboard key that opens and closes the panel.")]
-        DevKey _toggleKey = DevKey.F1;
-
-        [SerializeField]
-        [Tooltip("Open the panel by holding several fingers on the screen. For phones and tablets.")]
-        bool _mobileGesture = true;
-
-        [SerializeField, Range(2, 5)]
-        [Tooltip("How many fingers the gesture needs.")]
-        int _gestureFingers = 3;
-
-        [SerializeField, Range(0.1f, 2f)]
-        [Tooltip("How long those fingers must stay down, in unscaled seconds.")]
-        float _gestureHold = 0.5f;
 
         [Header("Behaviour")]
         [SerializeField]
@@ -63,8 +52,9 @@ namespace DevKit
         static DevKitBootstrap _instance;
 
         DevPanel _panel;
-        float _gestureTimer;
-        bool _gestureFired;
+
+        /// <summary>True while the panel is on screen.</summary>
+        public bool IsOpen { get { return _panel != null && _panel.IsVisible; } }
 
         void Awake()
         {
@@ -87,7 +77,7 @@ namespace DevKit
             }
 
             // Deliberately nothing else here. No reflection scan, no UI construction - both wait
-            // for the first toggle.
+            // for the first Open. There is no Update either: nothing is polled.
         }
 
         void Start()
@@ -106,62 +96,10 @@ namespace DevKit
             }
         }
 
-        void Update()
-        {
-            if (DevKitInput.GetKeyDown(_toggleKey))
-            {
-                Toggle();
-                return;
-            }
-
-            if (_panel != null && _panel.IsVisible && _toggleKey != DevKey.Escape && DevKitInput.GetKeyDown(DevKey.Escape))
-            {
-                Close();
-                return;
-            }
-
-            if (_mobileGesture)
-            {
-                UpdateGesture();
-            }
-        }
-
-        void UpdateGesture()
-        {
-            if (DevKitInput.TouchCount >= _gestureFingers)
-            {
-                if (_gestureFired)
-                {
-                    return;
-                }
-
-                _gestureTimer += Time.unscaledDeltaTime;
-                if (_gestureTimer >= _gestureHold)
-                {
-                    _gestureFired = true;
-                    Toggle();
-                }
-            }
-            else
-            {
-                _gestureTimer = 0f;
-                _gestureFired = false;
-            }
-        }
-
-        void Toggle()
-        {
-            if (_panel != null && _panel.IsVisible)
-            {
-                Close();
-            }
-            else
-            {
-                Open();
-            }
-        }
-
-        void Open()
+        /// <summary>
+        /// Opens the panel, building it on first use. Hook this straight to a UI Button's OnClick.
+        /// </summary>
+        public void Open()
         {
             if (_panel == null)
             {
@@ -173,11 +111,25 @@ namespace DevKit
             _panel.SetVisible(true);
         }
 
-        void Close()
+        /// <summary>Closes the panel if it is open. Safe to call when it was never built.</summary>
+        public void Close()
         {
             if (_panel != null)
             {
                 _panel.SetVisible(false);
+            }
+        }
+
+        /// <summary>Opens the panel if it is closed, closes it if it is open.</summary>
+        public void Toggle()
+        {
+            if (IsOpen)
+            {
+                Close();
+            }
+            else
+            {
+                Open();
             }
         }
 
@@ -200,9 +152,29 @@ namespace DevKit
 
         static void WarnNoBootstrap(string what)
         {
-            DevKitLog.Warning(string.Format("Cannot {0} the panel: no DevKitBootstrap in the scene. " + "Add one through GameObject > Dev > Add DevKit Bootstrap.", what));
+            DevKitLog.Warning(string.Format(
+                "Cannot {0} the panel: no DevKitBootstrap in the scene. " +
+                "Add one through GameObject > Dev > Add DevKit Bootstrap.", what));
         }
 #else
+        /// <summary>
+        /// No-op when <c>DEVKIT_ENABLED</c> is undefined, so a Button still wired to this method in
+        /// a shipped scene does nothing instead of throwing a missing-method error.
+        /// </summary>
+        public void Open()
+        {
+        }
+
+        /// <inheritdoc cref="Open"/>
+        public void Close()
+        {
+        }
+
+        /// <inheritdoc cref="Open"/>
+        public void Toggle()
+        {
+        }
+
         void Awake()
         {
             // DEVKIT_ENABLED is undefined: leave no trace, not even an idle GameObject.

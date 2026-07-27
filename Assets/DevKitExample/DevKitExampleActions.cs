@@ -7,7 +7,8 @@ using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Example DevKit wiring. Put this on the same GameObject as <c>DevKitBootstrap</c>, press Play,
-/// press F1.
+/// then open the panel by calling <c>DevKitBootstrap.Open()</c> - from a UI Button, or by ticking
+/// "Open On Start" on the bootstrap.
 /// <para>
 /// It carries a little fake game state - health, coins, speed, god mode, difficulty - purely so the
 /// panel has something to move. Every action below is a one-liner you would replace with a call

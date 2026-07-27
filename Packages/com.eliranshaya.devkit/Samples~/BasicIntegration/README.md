@@ -4,7 +4,8 @@
    (or use **GameObject > Dev > Add DevKit Bootstrap**).
 2. Create a second GameObject and add both **SampleWallet** and **SampleGameAdapter**.
 3. Make sure `DEVKIT_ENABLED` is on under **Project Settings > DevKit**.
-4. Enter Play Mode and press **F1**.
+4. Tick **Open On Start** on the bootstrap (or wire a UI Button to `DevKitBootstrap.Open`).
+5. Enter Play Mode.
 
 You should see these categories in the left rail:
 

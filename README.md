@@ -1,6 +1,8 @@
 # DevKit
 
-DevKit is a zero-setup developer and cheat panel for Unity. You drop **one empty GameObject** into a scene, press a hotkey, and a full debug panel builds itself at runtime — no prefabs, no sprites, no fonts, no scene wiring. Mark a method with `[DevAction("Economy/Add 1000$")]` and it shows up as a button; give the method an `int` parameter and it shows up as a button with an input field. The whole package is gated behind a single define symbol, so a release build contains none of it: call sites are erased by the compiler, and a bootstrap GameObject left in a shipped scene destroys itself in `Awake`.
+DevKit is a zero-setup developer and cheat panel for Unity. You drop **one empty GameObject** into a scene, call `Open()`, and a full debug panel builds itself at runtime — no prefabs, no sprites, no fonts, no scene wiring. Mark a method with `[DevAction("Economy/Add 1000$")]` and it shows up as a button; give the method an `int` parameter and it shows up as a button with an input field. The whole package is gated behind a single define symbol, so a release build contains none of it: call sites are erased by the compiler, and a bootstrap GameObject left in a shipped scene destroys itself in `Awake`.
+
+DevKit binds no input of its own — you decide what opens it.
 
 ## Requirements
 
@@ -24,7 +26,7 @@ https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.d
 To lock to a specific version, append the tag:
 
 ```
-https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.devkit#1.0.0
+https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.devkit#1.1.0
 ```
 
 You can also add it manually by editing your project's `Packages/manifest.json`:
@@ -32,7 +34,7 @@ You can also add it manually by editing your project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.eliranshaya.devkit": "https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.devkit#1.0.0"
+    "com.eliranshaya.devkit": "https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.devkit#1.1.0"
   }
 }
 ```
@@ -41,9 +43,34 @@ You can also add it manually by editing your project's `Packages/manifest.json`:
 
 1. Open **Project Settings → DevKit** and enable the define for your active build target.
 2. Use **GameObject → Dev → Add DevKit Bootstrap** to drop the component into your first scene.
-3. Enter Play Mode and press **F1** (on device: hold three fingers for half a second).
+3. Decide what opens it — see below — and enter Play Mode.
 
 That is the whole setup. The panel opens with the built-in `Time` and `Diagnostics` categories already populated.
+
+## Opening the panel
+
+`Open`, `Close` and `Toggle` are public, parameterless methods on `DevKitBootstrap`, so they appear directly in a UI Button's **OnClick** dropdown — drag the DevKit GameObject into the slot and pick `DevKitBootstrap → Open`. No code required.
+
+From your own code, either of these works:
+
+```csharp
+// Anywhere, without holding a reference. Erased entirely in release builds.
+DevActions.Toggle();
+
+// Or through the component, if you already have it.
+_bootstrap.Open();
+```
+
+Tick **Open On Start** on the bootstrap to have it open on the first frame while you iterate.
+
+Want a keyboard shortcut? Bind it yourself, with whichever input backend you already use:
+
+```csharp
+if (Input.GetKeyDown(KeyCode.F1)) DevActions.Toggle();   // legacy input
+if (Keyboard.current.f1Key.wasPressedThisFrame) DevActions.Toggle();   // Input System
+```
+
+DevKit deliberately ships no hotkey and no touch gesture of its own: it polls nothing, has no `Update`, and never competes with your game's input.
 
 ## Registering actions
 
@@ -86,7 +113,7 @@ DevActions.Unregister("Level/Win");   // rarely needed; the registry is cleared 
 
 `RegisterWatch` adds a read-only live-updating label. Getters are polled at 4 Hz, and only while their category is on screen.
 
-`DevActions.Open()`, `Close()` and `Toggle()` drive the panel from your own code.
+`DevActions.Open()`, `Close()` and `Toggle()` drive the panel from anywhere without a reference, and are erased in release builds.
 
 ## Built-in modules
 
@@ -132,11 +159,11 @@ Your game code keeps compiling either way. That is the point of using `[Conditio
 
 ## How it behaves
 
-- **Lazy.** The reflection scan and the canvas are built on the first toggle, never in `Awake` or `Start`. A player who never presses the hotkey pays one `if` per frame.
+- **Lazy, and idle.** The reflection scan and the canvas are built on the first `Open()`, never in `Awake` or `Start`. `DevKitBootstrap` has no `Update` at all, so a player who never opens the panel pays literally nothing per frame.
 - **Scan cost.** Assemblies prefixed `System`, `Unity`, `mscorlib`, `netstandard`, `Mono.`, `nunit` and `JetBrains` are skipped. Each remaining assembly is scanned inside its own `try/catch`, so one broken plugin cannot take the panel down. A scan over 50 ms is logged.
 - **Zero assets.** Colours come from `Texture2D.whiteTexture` tinted by `Image.color`; text uses the engine's built-in font. Nothing is loaded from disk.
 - **Non-invasive.** An existing `EventSystem` is left strictly alone; one is only created if the project has none. `Time.timeScale` is only touched when you opt into `pauseWhenOpen`, and the *previous* value is restored — never assumed to be 1.
-- **Survives scene loads, not play sessions.** The panel, the event system and the bootstrap are `DontDestroyOnLoad`, so they live in their own scene — disabling every object in your active scene will not hide the panel, and that is deliberate. Close it with the hotkey, the X, or `DevActions.Close()`. Everything DevKit creates is destroyed on `Application.quitting`, which fires when you leave Play Mode too.
+- **Survives scene loads, not play sessions.** The panel, the event system and the bootstrap are `DontDestroyOnLoad`, so they live in their own scene — disabling every object in your active scene will not hide the panel, and that is deliberate. Close it with the X in the header, or `DevActions.Close()`. Everything DevKit creates is destroyed on `Application.quitting`, which fires when you leave Play Mode too.
 - **Failure is visible.** An action that throws shows a red toast with the message and logs the full stack. The panel stays open.
 
 ## Panel layout
