@@ -99,6 +99,19 @@ namespace DevKit.Internal
             Add(DevActionEntry.CreateWatch(path, getter));
         }
 
+        internal static void AddTable(string path, DevTable table)
+        {
+            if (!Validate(path, table)) return;
+
+            if (table.Columns.Count == 0)
+            {
+                DevKitLog.Warning(string.Format("Ignored '{0}': the table has no columns.", path));
+                return;
+            }
+
+            Add(DevActionEntry.CreateTable(path, table));
+        }
+
         internal static void AddInfo(string path, string text)
         {
             if (string.IsNullOrEmpty(path)) return;

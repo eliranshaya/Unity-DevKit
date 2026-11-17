@@ -124,6 +124,74 @@ namespace DevKit.Internal
         internal const float ConfirmBoxWidth = 900f;
         internal const float ConfirmBoxHeight = 360f;
 
+        // ---------------------------------------------------------------- tables
+        //
+        // Columns are measured, not fixed: each is as wide as the longest thing it holds, and every
+        // cell in it shares that width so the grid stays aligned. The numbers below are the padding
+        // and limits around that measurement.
+
+        /// <summary>
+        /// Cell text in a table, a step above body text. A table is read value by value, often on a
+        /// phone held at arm's length while you feel or watch what you just changed.
+        /// </summary>
+        internal const int FontSizeTable = 30;
+        internal const int FontSizeTableHeader = FontSizeSmall;
+
+        internal const float TableHeaderHeight = 48f;
+        internal const float TableRowGap = 6f;
+        internal const float TableCellGap = 6f;
+        internal const float TableCellPad = 12f;
+        internal const float TableHeaderPad = 4f;
+        internal const float TableActionsGap = 10f;
+
+        /// <summary>
+        /// Added to every measured column, so rounding in the glyph rasteriser cannot clip a value
+        /// that measured exactly to the edge.
+        /// </summary>
+        internal const float TableMeasureSlack = 4f;
+
+        /// <summary>
+        /// A table is laid out at the width its content needs and may grow to this multiple of it to
+        /// use spare room - no further. A wide pane would otherwise spread a short name column across
+        /// half the screen and strand the values at the far edge.
+        /// </summary>
+        internal const float TableMaxStretch = 1.25f;
+
+        /// <summary>
+        /// How far a column may be squeezed, as a share of its measured width, when the pane is
+        /// narrower than the table. Past this the row overflows rather than clipping every value.
+        /// </summary>
+        internal const float TableMinShare = 0.8f;
+
+        /// <summary>Width of the accent bar beside a highlighted row name.</summary>
+        internal const float TableMarkWidth = 6f;
+
+        /// <summary>Narrowest a read-only text column starts at, whatever it holds when first drawn.</summary>
+        internal const float TableTextMinWidth = 120f;
+
+        /// <summary>
+        /// The widest value a number column expects. A column is never measured narrower than this,
+        /// so a value that grows a digit later still fits.
+        /// </summary>
+        internal const string TableNumberSample = "0.000";
+        internal const string TableIntegerSample = "0000";
+
+        /// <summary>The dropdown arrow, drawn as a triangle rather than a glyph.</summary>
+        internal const float CaretWidth = 18f;
+        internal const float CaretHeight = 10f;
+        internal const float CaretGap = 8f;
+
+        // ---------------------------------------------------------------- choice list
+
+        /// <summary>Invisible: the catcher behind an open list only has to receive the tap that closes it.</summary>
+        internal static readonly Color ChoiceCatcher = new Color(0f, 0f, 0f, 0f);
+        internal static readonly Color ChoiceBackground = new Color(0.129f, 0.149f, 0.180f, 1f);
+        internal static readonly Color ChoiceBorder = new Color(0.298f, 0.616f, 0.976f, 0.6f);
+        internal const float ChoiceBorderWidth = 2f;
+
+        /// <summary>Gap between a cell and the list that opens from it.</summary>
+        internal const float ChoiceOffset = 6f;
+
         // ---------------------------------------------------------------- timing
 
         /// <summary>Watch getters are polled at 4 Hz. Never per frame.</summary>

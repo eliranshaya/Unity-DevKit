@@ -16,6 +16,9 @@ namespace DevKit.Internal
 
         /// <summary>A static piece of explanatory text. Used for the "no adapter" hint.</summary>
         Info,
+
+        /// <summary>A grid of live cells. See <see cref="DevTable{TRow}"/>.</summary>
+        Table,
     }
 
     /// <summary>Parameter types the panel knows how to render.</summary>
@@ -152,6 +155,9 @@ namespace DevKit.Internal
         /// <summary>Set for <see cref="DevEntryKind.Info"/>.</summary>
         internal string InfoText;
 
+        /// <summary>Set for <see cref="DevEntryKind.Table"/>.</summary>
+        internal DevTable Table;
+
         Action<object[]> _invoker;
         object[] _args = NoArgs;
 
@@ -182,6 +188,15 @@ namespace DevKit.Internal
             DevActionEntry entry = new DevActionEntry();
             entry.Kind = DevEntryKind.Info;
             entry.InfoText = text;
+            entry.SplitPath(path);
+            return entry;
+        }
+
+        internal static DevActionEntry CreateTable(string path, DevTable table)
+        {
+            DevActionEntry entry = new DevActionEntry();
+            entry.Kind = DevEntryKind.Table;
+            entry.Table = table;
             entry.SplitPath(path);
             return entry;
         }

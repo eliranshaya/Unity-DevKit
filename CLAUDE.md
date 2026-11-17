@@ -58,6 +58,8 @@ Unity-DevKit/
         │   │   ├── DevActionAttribute.cs     # the [DevAction] attribute
         │   │   ├── DevActionEntry.cs         # internal record of one registered entry
         │   │   ├── DevActionRegistry.cs      # storage + reflection scan
+        │   │   ├── DevTable.cs               # public DevTable / DevTable<TRow> builder
+        │   │   ├── DevTableColumn.cs         # a table column with its row type erased
         │   │   ├── DevKitCompat.cs           # every 2021.3-vs-Unity-6 API difference
         │   │   ├── DevKitInput.cs            # picks the UI input module for the active backend
         │   │   ├── DevKitLog.cs
@@ -66,11 +68,15 @@ Unity-DevKit/
         │   │   ├── DevPanel.cs               # builds + owns the runtime canvas
         │   │   ├── DevPanelBuilder.cs        # low-level uGUI construction helpers
         │   │   ├── DevPanelTheme.cs          # colors, sizes, spacing — all code constants
+        │   │   ├── DevTriangle.cs            # the dropdown arrow, drawn as geometry
         │   │   └── Widgets/
         │   │       ├── DevActionRow.cs       # button row, with or without param fields
         │   │       ├── DevParamField.cs      # int / float / string / bool / enum field
         │   │       ├── DevWatchRow.cs        # live-updating read-only label
         │   │       ├── DevInfoRow.cs         # static hint text
+        │   │       ├── DevTableView.cs       # draws a registered table, sizes its columns
+        │   │       ├── DevTableCell.cs       # one cell per column kind
+        │   │       ├── DevChoicePopup.cs     # the option list a dropdown cell opens
         │   │       ├── DevToast.cs
         │   │       └── DevConfirmDialog.cs
         │   └── Modules/
@@ -129,6 +135,29 @@ DevActions.Unregister("Level/Win");   // rarely needed; registry is cleared on d
 ```
 
 `RegisterWatch` adds a read-only live-updating label. Poll it at ~4 Hz, never per-frame.
+
+### 3.3 Tables
+
+For many items that share the same properties. Rows are items, columns are properties, and every cell
+is bound live.
+
+```csharp
+DevActions.RegisterTable("Haptics/Tuning", new DevTable<HapticId>(ids)
+    .Label("Haptic", id => id.ToString(), onClick: Play, highlight: IsModified)
+    .Float("Amplitude", id => Amp(id), SetAmp)
+    .Button("", "Reset", Reset, enabled: IsModified)
+    .Choice("Preset", presetNames, PresetIndex, SetPreset)
+    .Action("Reset All", ResetAll, confirm: true));
+```
+
+- **No Run button, ever.** A typed number is written when the edit is committed (onEndEdit), never per
+  keystroke. A dropdown or a toggle writes on the tap. Committing text the field already showed is not an
+  edit and writes nothing.
+- After every write, tap or action the **whole table is re-read**. Setters may change other columns.
+- Cells are polled at the watch rate and redraw only on change. The unchanged path must not allocate.
+- `DevTable<TRow>` erases the row type at the boundary: each builder method wraps the user's typed delegates
+  into index-based ones on `DevTableColumn`. The UI never sees `TRow`.
+- The builder is always compiled. With the symbol off its methods record nothing and return `this`.
 
 ---
 
@@ -212,6 +241,23 @@ asset and a theme stylesheet, which violates the zero-assets rule.
 - Minimum touch target: 88×88 px at the reference resolution. This gets used on phones.
 - All colors, paddings, and font sizes live as `const`/`static readonly` in
   `DevPanelTheme`. Never inline a magic number in a widget.
+
+### Tables
+
+- **Columns are measured, not fixed.** `DevTableView` measures each column against what it can hold:
+  every row name, every option, a sample number. It uses `DevPanelBuilder.MeasureWidth`, the same
+  generator a `Text` lays out with. The header and every cell of a column share one min/preferred/flexible
+  envelope, which is what keeps the grid aligned. A column must never be wider than its content for no
+  reason. That was the complaint that started this feature.
+- Spare width goes only to editable columns (numbers, toggles, dropdowns, text), and the whole table grows
+  to at most `TableMaxStretch` times its natural width. Names and per-row buttons keep their measured width.
+- Table cells use `FontSizeTable`, a step above `FontSizeBody`.
+- **Dropdowns use `DevChoicePopup`, never uGUI `Dropdown`.** `Dropdown` puts its list on a nested canvas at
+  sorting order 30000, underneath this panel's `short.MaxValue`, and needs a template hierarchy.
+  `DevChoicePopup` is one overlay on the panel's own canvas, reused by every dropdown. It closes whenever
+  the pane is rebuilt, the layout flips or the panel hides.
+- The dropdown arrow is `DevTriangle`, three vertices. Not a glyph, which the built-in font may lack, and
+  not a sprite.
 
 ### Behavior
 

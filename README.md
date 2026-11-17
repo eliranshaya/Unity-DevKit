@@ -1,6 +1,6 @@
 # DevKit
 
-DevKit is a zero-setup developer and cheat panel for Unity. You drop **one empty GameObject** into a scene, call `Open()`, and a full debug panel builds itself at runtime — no prefabs, no sprites, no fonts, no scene wiring. Mark a method with `[DevAction("Economy/Add 1000$")]` and it shows up as a button; give the method an `int` parameter and it shows up as a button with an input field. The whole package is gated behind a single define symbol, so a release build contains none of it: call sites are erased by the compiler, and a bootstrap GameObject left in a shipped scene destroys itself in `Awake`.
+DevKit is a zero-setup developer and cheat panel for Unity. You drop **one empty GameObject** into a scene, call `Open()`, and a full debug panel builds itself at runtime — no prefabs, no sprites, no fonts, no scene wiring. Mark a method with `[DevAction("Economy/Add 1000$")]` and it shows up as a button; give the method an `int` parameter and it shows up as a button with an input field. Register a table and every item gets a row of live, editable cells. The whole package is gated behind a single define symbol, so a release build contains none of it: call sites are erased by the compiler, and a bootstrap GameObject left in a shipped scene destroys itself in `Awake`.
 
 DevKit binds no input of its own — you decide what opens it.
 
@@ -26,7 +26,7 @@ https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.d
 To lock to a specific version, append the tag:
 
 ```
-https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.devkit#1.1.1
+https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.devkit#1.2.0
 ```
 
 You can also add it manually by editing your project's `Packages/manifest.json`:
@@ -34,7 +34,7 @@ You can also add it manually by editing your project's `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.eliranshaya.devkit": "https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.devkit#1.1.1"
+    "com.eliranshaya.devkit": "https://github.com/eliranshaya/Unity-DevKit.git?path=/Packages/com.eliranshaya.devkit#1.2.0"
   }
 }
 ```
@@ -115,6 +115,37 @@ DevActions.Unregister("Level/Win");   // rarely needed; the registry is cleared 
 
 `DevActions.Open()`, `Close()` and `Toggle()` drive the panel from anywhere without a reference, and are erased in release builds.
 
+### Tables
+
+When many things share the same properties (every enemy type, every sound, every haptic), register one table instead of a pile of rows. Each item gets a row and each property gets a column. Every cell is bound to your getter and setter.
+
+```csharp
+DevActions.RegisterTable("Enemies/Stats", new DevTable<EnemyType>(enemyTypes)
+    .Label("Enemy", e => e.Name, onClick: Spawn, highlight: IsTuned)
+    .Float("Speed", e => e.Speed, (e, v) => e.Speed = v)
+    .Int("Damage", e => e.Damage, (e, v) => e.Damage = v)
+    .Toggle("Elite", e => e.Elite, (e, v) => e.Elite = v)
+    .Choice("Tier", e => e.Tier, (e, v) => e.Tier = v)      // any enum
+    .Button("", "Reset", ResetStats, enabled: IsTuned)
+    .Action("Reset All", ResetAllStats, confirm: true));
+```
+
+There is no Run button. A typed value is written when the edit is committed: Enter, Done on a phone keyboard, or tapping anywhere else. A dropdown or a toggle writes on the tap. After every change the whole table is read again, so a setter that also changes other columns (picking a preset that fills in three values, say) shows its effect immediately.
+
+| Column | Cell |
+|---|---|
+| `Label(header, text, onClick, highlight)` | The row name. With `onClick` it is a button for the row's main action; `highlight` draws it in the accent colour, for example to mark changed rows. Names are read when the table is drawn. |
+| `Float(header, get, set, format)` / `Int(header, get, set)` | An editable number. |
+| `Toggle(header, get, set)` | ON / OFF; a tap flips it. |
+| `Choice(header, options, get, set)` / `Choice<TEnum>(header, get, set)` | A dropdown over string options (by index) or over an enum's values. |
+| `Text(header, get)` | A read-only live value. |
+| `Button(header, label, onClick, enabled)` | The same button on every row, dimmed while `enabled` says no. |
+| `Action(label, action, confirm)` | A full-width button under the table that acts on all of it. |
+
+Columns are sized to what they hold (the longest name, the widest option) and stay aligned from row to row, so a name column is never wider than its longest name. Spare width goes to the editable columns, and only up to 1.25 times the table's natural width. Searching narrows a table to the rows whose names match. Cells are polled at 4 Hz while the table is on screen, so changes made elsewhere show up too.
+
+Build the table inline in the `RegisterTable` call, as above, so a release build erases it along with the call. The rows are copied when you register; register again to change them.
+
 ## Built-in modules
 
 | Module | Actions |
@@ -164,7 +195,7 @@ Your game code keeps compiling either way. That is the point of using `[Conditio
 
 ## Panel layout
 
-Search sits in the header and spans every category, labelling each result with its full path. Rows are 88 units tall at the 1920×1080 reference resolution — the minimum comfortable touch target on a phone.
+Search sits in the header and spans every category, labelling each result with its full path, and finds table rows by name as well. Rows are 88 units tall at the 1920×1080 reference resolution — the minimum comfortable touch target on a phone.
 
 The panel picks one of two layouts from the canvas width:
 

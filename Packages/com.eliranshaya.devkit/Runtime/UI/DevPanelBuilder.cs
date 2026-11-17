@@ -15,6 +15,7 @@ namespace DevKit.Internal
         const int UILayer = 5;
 
         static Font _font;
+        static TextGenerator _measurer;
 
         internal static Font Font
         {
@@ -73,6 +74,53 @@ namespace DevKit.Internal
             text.horizontalOverflow = wrap ? HorizontalWrapMode.Wrap : HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             return text;
+        }
+
+        /// <summary>
+        /// Width, in canvas units, that <paramref name="value"/> takes on one line in the panel font
+        /// at <paramref name="fontSize"/>. Measured with the same generator a <see cref="Text"/> lays
+        /// out with, so a column sized from it fits what is drawn - without creating a GameObject.
+        /// </summary>
+        internal static float MeasureWidth(string value, int fontSize)
+        {
+            if (string.IsNullOrEmpty(value) || Font == null)
+            {
+                return 0f;
+            }
+
+            if (_measurer == null)
+            {
+                _measurer = new TextGenerator();
+            }
+
+            TextGenerationSettings settings = new TextGenerationSettings();
+            settings.font = Font;
+            settings.fontSize = fontSize;
+            settings.fontStyle = FontStyle.Normal;
+            settings.lineSpacing = 1f;
+            settings.richText = false;
+            // Unscaled: the generator then answers in reference units, which is what layout uses.
+            settings.scaleFactor = 1f;
+            settings.color = Color.white;
+            settings.textAnchor = TextAnchor.MiddleLeft;
+            settings.horizontalOverflow = HorizontalWrapMode.Overflow;
+            settings.verticalOverflow = VerticalWrapMode.Overflow;
+            settings.generationExtents = Vector2.zero;
+            settings.pivot = new Vector2(0.5f, 0.5f);
+            settings.updateBounds = false;
+            settings.generateOutOfBounds = true;
+
+            return _measurer.GetPreferredWidth(value, settings);
+        }
+
+        /// <summary>A solid triangle pointing down, filling its rect. See <see cref="DevTriangle"/>.</summary>
+        internal static DevTriangle NewTriangle(string name, Transform parent, Color color)
+        {
+            RectTransform rect = NewRect(name, parent);
+            DevTriangle triangle = rect.gameObject.AddComponent<DevTriangle>();
+            triangle.color = color;
+            triangle.raycastTarget = false;
+            return triangle;
         }
 
         // ---------------------------------------------------------------- controls

@@ -56,6 +56,23 @@ namespace DevKit
         }
 
         /// <summary>
+        /// Adds a table: one row per item, one column per property, every cell bound live to your
+        /// getters and setters. Build it with <see cref="DevTable{TRow}"/>, inline in this call, so
+        /// a release build erases the table along with the call.
+        /// </summary>
+        /// <param name="path">
+        /// Slash separated path. The category decides where the table appears; the last segment
+        /// names it in search results.
+        /// </param>
+        [Conditional("DEVKIT_ENABLED")]
+        public static void RegisterTable(string path, DevTable table)
+        {
+#if DEVKIT_ENABLED
+            DevActionRegistry.AddTable(path, table);
+#endif
+        }
+
+        /// <summary>
         /// Removes a previously registered entry. Rarely needed - the registry is cleared before
         /// every play session.
         /// </summary>

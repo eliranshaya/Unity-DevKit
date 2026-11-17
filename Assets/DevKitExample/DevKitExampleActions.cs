@@ -35,6 +35,16 @@ public class DevKitExampleActions : MonoBehaviour
 
     readonly List<GameObject> _spawned = new List<GameObject>();
 
+    /// <summary>The rows of the example table: a few enemy types, each with its own tunable stats.</summary>
+    readonly Enemy[] _enemies =
+    {
+        new Enemy("Slime", 1.5f, 5, false, Difficulty.Easy),
+        new Enemy("Goblin", 3.2f, 12, false, Difficulty.Normal),
+        new Enemy("Skeleton Archer", 2.4f, 18, false, Difficulty.Normal),
+        new Enemy("Ogre", 1.1f, 40, true, Difficulty.Hard),
+        new Enemy("Wraith", 4.5f, 25, true, Difficulty.Nightmare),
+    };
+
     // A real game exposes its state to the rest of the game. These also keep the fields above
     // "used" when DEVKIT_ENABLED is off and every Register call below is erased by the compiler -
     // otherwise you would ship a handful of CS0414 warnings.
@@ -51,6 +61,7 @@ public class DevKitExampleActions : MonoBehaviour
         RegisterWorldActions();
         RegisterDeviceActions();
         RegisterStatWatches();
+        RegisterTables();
     }
 
     // ------------------------------------------------------------------ player
@@ -137,6 +148,74 @@ public class DevKitExampleActions : MonoBehaviour
         DevActions.RegisterWatch("Stats/VSync", () => QualitySettings.vSyncCount > 0 ? "ON" : "OFF");
         DevActions.RegisterWatch("Stats/Target FPS", () =>
             Application.targetFrameRate < 0 ? "platform default" : Application.targetFrameRate.ToString());
+    }
+
+    // ------------------------------------------------------------------ tables
+    //
+    // Many things with the same properties - every enemy type, here - are one table instead of a
+    // Select row plus a Set row per property. Every cell is live: a typed number is written when you
+    // commit it, a dropdown or a toggle on the tap. There is no Run button anywhere.
+
+    void RegisterTables()
+    {
+        DevActions.RegisterTable("Enemies/Stats", new DevTable<Enemy>(_enemies)
+            // Tapping a name is the row's main action. Highlighted rows are the ones you changed.
+            .Label("Enemy", e => e.Name, onClick: e => Debug.Log("[Example] Spawned a " + e.Name + "."),
+                highlight: e => e.IsTuned)
+            .Float("Speed", e => e.Speed, (e, v) => e.Speed = Mathf.Max(0f, v))
+            .Int("Damage", e => e.Damage, (e, v) => e.Damage = Mathf.Max(0, v))
+            .Toggle("Elite", e => e.Elite, (e, v) => e.Elite = v)
+            // An enum becomes a dropdown of its values.
+            .Choice("Tier", e => e.Tier, (e, v) => e.Tier = v)
+            .Button("", "Reset", e => e.Reset(), enabled: e => e.IsTuned)
+            .Action("Reset All", ResetEnemies, confirm: true));
+    }
+
+    void ResetEnemies()
+    {
+        for (int i = 0; i < _enemies.Length; i++)
+        {
+            _enemies[i].Reset();
+        }
+    }
+
+    /// <summary>One enemy type: the stats it ships with, and the ones the table is editing.</summary>
+    sealed class Enemy
+    {
+        public readonly string Name;
+
+        public float Speed;
+        public int Damage;
+        public bool Elite;
+        public Difficulty Tier;
+
+        readonly float _baseSpeed;
+        readonly int _baseDamage;
+        readonly bool _baseElite;
+        readonly Difficulty _baseTier;
+
+        public Enemy(string name, float speed, int damage, bool elite, Difficulty tier)
+        {
+            Name = name;
+            _baseSpeed = speed;
+            _baseDamage = damage;
+            _baseElite = elite;
+            _baseTier = tier;
+            Reset();
+        }
+
+        public bool IsTuned
+        {
+            get { return !Mathf.Approximately(Speed, _baseSpeed) || Damage != _baseDamage || Elite != _baseElite || Tier != _baseTier; }
+        }
+
+        public void Reset()
+        {
+            Speed = _baseSpeed;
+            Damage = _baseDamage;
+            Elite = _baseElite;
+            Tier = _baseTier;
+        }
     }
 
     // ------------------------------------------------------------------ the other style

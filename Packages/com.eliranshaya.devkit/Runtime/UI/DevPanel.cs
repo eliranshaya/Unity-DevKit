@@ -11,13 +11,14 @@ namespace DevKit.Internal
 {
     /// <summary>
     /// Builds and owns the runtime canvas: a category rail on the left, the actions of the
-    /// selected category on the right, a search box, a confirm dialog and a toast strip.
+    /// selected category on the right, a search box, a confirm dialog, a dropdown list for table
+    /// cells and a toast strip.
     /// <para>
     /// Constructed once, on the first toggle, then only shown and hidden. Rows for a category are
     /// built when that category is selected, so a registry of 200 actions still opens instantly.
     /// </para>
     /// </summary>
-    internal sealed class DevPanel : MonoBehaviour
+    internal sealed class DevPanel : MonoBehaviour, IDevTableHost
     {
         const string GeneralCategory = "General";
 
@@ -25,6 +26,7 @@ namespace DevKit.Internal
         readonly Dictionary<string, Image> _categoryTints = new Dictionary<string, Image>(16, StringComparer.Ordinal);
         readonly List<DevActionEntry> _matches = new List<DevActionEntry>(64);
         readonly List<DevWatchRow> _watchRows = new List<DevWatchRow>(16);
+        readonly List<DevTableView> _tableViews = new List<DevTableView>(2);
         readonly StringBuilder _scratch = new StringBuilder(64);
 
         GameObject _content;
@@ -35,6 +37,7 @@ namespace DevKit.Internal
         Text _footerLabel;
         DevToast _toast;
         DevConfirmDialog _confirm;
+        DevChoicePopup _choice;
 
         /// <summary>True while the screen is too narrow for a side rail. See <see cref="ApplyLayout"/>.</summary>
         bool _narrow;
@@ -97,6 +100,7 @@ namespace DevKit.Internal
             BuildFooter(window.transform);
 
             _toast = new DevToast(window.transform, DevPanelTheme.FooterHeight + DevPanelTheme.PadOuter);
+            _choice = new DevChoicePopup(scrim.transform);
             _confirm = new DevConfirmDialog(scrim.transform);
 
             ApplyLayout(true);
@@ -156,6 +160,10 @@ namespace DevKit.Internal
             DevPanelBuilder.Fill(_bodyRoot, 0f, DevPanelTheme.HeaderHeight, 0f, DevPanelTheme.FooterHeight);
 
             _confirm.SetCompact(narrow);
+
+            // The list would be left pointing at a cell that is about to be destroyed.
+            _choice.Close();
+            ReleaseTables();
 
             DevPanelBuilder.DestroyChildren(_bodyRoot);
             BuildBody(_bodyRoot, narrow);
@@ -279,6 +287,7 @@ namespace DevKit.Internal
             {
                 RestorePause();
                 _confirm.Close();
+                _choice.Close();
                 _toast.Hide();
             }
         }
@@ -418,10 +427,13 @@ namespace DevKit.Internal
         /// <summary>
         /// Rebuilds only the rows currently on screen: the selected category, or - while a filter
         /// is typed - every match across all categories, labelled by full path so results from
-        /// different categories stay readable.
+        /// different categories stay readable. A table matches on its path, or on the names of its
+        /// rows - and then shows only the rows that matched.
         /// </summary>
         void RebuildPane()
         {
+            _choice.Close();
+            ReleaseTables();
             DevPanelBuilder.DestroyChildren(_paneContent);
             _watchRows.Clear();
             _matches.Clear();
@@ -434,7 +446,8 @@ namespace DevKit.Internal
                 DevActionEntry entry = all[i];
                 if (searching)
                 {
-                    if (entry.Path.IndexOf(_filter, StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (PathMatches(entry) ||
+                        (entry.Kind == DevEntryKind.Table && DevTableView.AnyRowMatches(entry.Table, _filter)))
                     {
                         _matches.Add(entry);
                     }
@@ -470,10 +483,31 @@ namespace DevKit.Internal
                     case DevEntryKind.Info:
                         DevInfoRow.Build(_paneContent, entry, label);
                         break;
+                    case DevEntryKind.Table:
+                        // Matched by a row name rather than its path: draw just those rows.
+                        string rowFilter = searching && !PathMatches(entry) ? _filter : null;
+                        _tableViews.Add(DevTableView.Build(_paneContent, entry, searching ? label : null, rowFilter, this));
+                        break;
                 }
             }
 
             RefreshWatches();
+        }
+
+        bool PathMatches(DevActionEntry entry)
+        {
+            return entry.Path.IndexOf(_filter, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>Cuts the live tables loose from GameObjects about to be destroyed.</summary>
+        void ReleaseTables()
+        {
+            for (int i = 0; i < _tableViews.Count; i++)
+            {
+                _tableViews[i].Release();
+            }
+
+            _tableViews.Clear();
         }
 
         static int CompareEntries(DevActionEntry a, DevActionEntry b)
@@ -511,38 +545,71 @@ namespace DevKit.Internal
 
         void InvokeEntry(DevActionEntry entry)
         {
-            if (entry.Confirm)
+            RunAction(entry.Path, entry.Label, entry.Invoke, entry.Confirm);
+        }
+
+        /// <summary>
+        /// Runs an action row or a table action: behind a yes/no prompt when it asks for one, then
+        /// a green toast on success.
+        /// </summary>
+        void RunAction(string path, string label, Action action, bool confirm)
+        {
+            if (confirm)
             {
-                DevActionEntry captured = entry;
-                _confirm.Ask("Run \"" + entry.Path + "\"?", delegate
+                _confirm.Ask("Run \"" + path + "\"?", delegate
                 {
-                    Execute(captured);
+                    RunAndReport(path, label, action);
                 });
                 return;
             }
 
-            Execute(entry);
+            RunAndReport(path, label, action);
+        }
+
+        void RunAndReport(string path, string label, Action action)
+        {
+            if (TryRun(path, action))
+            {
+                _toast.Show(label + " - ok", false);
+            }
         }
 
         /// <summary>
-        /// Runs an action. Anything it throws becomes a red toast plus a full stack in the console
-        /// - the panel must survive a misbehaving action, never close because of one.
+        /// Runs anything the user registered. Whatever it throws becomes a red toast plus a full
+        /// stack in the console - the panel must survive a misbehaving action, never close because
+        /// of one. Table edits come through here too, without the success toast.
         /// </summary>
-        void Execute(DevActionEntry entry)
+        bool TryRun(string path, Action action)
         {
             try
             {
-                entry.Invoke();
-                _toast.Show(entry.Label + " - ok", false);
+                action();
+                return true;
             }
             catch (Exception e)
             {
                 // Reflection wraps the real failure; showing the wrapper helps nobody.
                 Exception actual = e is TargetInvocationException && e.InnerException != null ? e.InnerException : e;
 
-                _toast.Show(entry.Path + ": " + actual.Message, true);
-                DevKitLog.Exception("Action '" + entry.Path + "' threw.", actual);
+                _toast.Show(path + ": " + actual.Message, true);
+                DevKitLog.Exception("Action '" + path + "' threw.", actual);
+                return false;
             }
+        }
+
+        bool IDevTableHost.TryRun(string path, Action action)
+        {
+            return TryRun(path, action);
+        }
+
+        void IDevTableHost.RunAction(string path, string label, Action action, bool confirm)
+        {
+            RunAction(path, label, action, confirm);
+        }
+
+        void IDevTableHost.ShowChoice(RectTransform anchor, float minWidth, string[] options, int selected, Action<int> onPick)
+        {
+            _choice.Show(anchor, minWidth, options, selected, onPick);
         }
 
         // ---------------------------------------------------------------- tick
@@ -582,11 +649,17 @@ namespace DevKit.Internal
             RefreshWatches();
         }
 
+        /// <summary>Polls everything live on screen: watch rows, and every cell of every table.</summary>
         void RefreshWatches()
         {
             for (int i = 0; i < _watchRows.Count; i++)
             {
                 _watchRows[i].Refresh(_scratch);
+            }
+
+            for (int i = 0; i < _tableViews.Count; i++)
+            {
+                _tableViews[i].Refresh();
             }
         }
     }

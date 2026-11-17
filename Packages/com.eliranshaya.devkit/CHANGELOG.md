@@ -4,6 +4,57 @@ All notable changes to this package are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-11-17
+
+Tables: many things that share the same properties, tuned in one grid. Before, the same job took a Select
+row plus a Set row and a Run button per property.
+
+### Added
+
+- `DevActions.RegisterTable` and `DevTable<TRow>`. One row per item (an enum's values, your own objects,
+  plain indices), one column per property. Column types:
+  - `Label`: row names, optionally a button (the row's main action) and optionally highlighted
+  - `Float` and `Int`
+  - `Toggle`
+  - `Choice`: a dropdown over a list of options, or over an enum's values
+  - `Text`: a read-only live value
+  - `Button`: the same button on every row, with an optional per-row enabled state
+- `DevTable<TRow>.Action` adds a full-width button under the table for something that acts on all of it,
+  such as "Reset All". Like an action row, it can ask for confirmation first and reports the outcome in a
+  toast.
+- Nothing in a table needs a Run button. A typed value is written the moment the edit is committed: Enter,
+  Done on a phone keyboard, or tapping anywhere else. A dropdown or a toggle writes on the tap. After every
+  change the whole table is read again, so a setter that also changes other columns shows its effect
+  immediately. Tables are polled at the watch rate too, so changes made elsewhere appear without reopening
+  the panel.
+- Columns are sized to what they hold (the longest name, the widest option) and stay aligned row to row.
+  Spare width goes to the editable columns, capped at 1.25 times the table's natural width, so a wide screen
+  does not stretch a short name column across half the pane.
+- Table cells use a larger font than list rows: 30 against 26.
+- A dropdown list for table cells. It opens below the cell, or above it when the cell is near the bottom of
+  the screen. It scrolls when the options do not fit, and closes when you pick an option or tap anywhere
+  outside it. It is not a uGUI `Dropdown`, whose list renders on a nested canvas at sorting order 30000,
+  underneath the panel.
+- Search matches the names of table rows as well as entry paths, and narrows a matching table to just the
+  rows that matched.
+
+### Changed
+
+- The package description no longer says to press F1. The hotkey was removed in 1.1.0.
+
+### Migration
+
+Nothing to migrate: every existing API is unchanged. To move a set of per-item "Select" and "Set" actions
+onto a table:
+
+```csharp
+DevActions.RegisterTable("Audio/Mixer", new DevTable<AudioSource>(sources)
+    .Label("Source", s => s.name, onClick: s => s.Play())
+    .Float("Volume", s => s.volume, (s, v) => s.volume = v)
+    .Toggle("Mute", s => s.mute, (s, v) => s.mute = v)
+    .Action("Stop All", StopAll));
+```
+
 ## [1.1.1] - 2026-07-28
 
 DevKit stops pretending to know what your game is.
